@@ -51,7 +51,7 @@ jobs:
       WRT_WORD: "12345678"
       WRT_IP: 192.168.68.1
       WRT_PW: password
-     <WRT_REPO: https://github.com/${{matrix.SOURCE}}.git
+      WRT_REPO: https://github.com/${{matrix.SOURCE}}.git
       WRT_BRANCH: ${{matrix.BRANCH}}
       WRT_SOURCE: ${{matrix.SOURCE}}
       WRT_PACKAGE: ${{inputs.PACKAGE || ''}}
