@@ -6,11 +6,9 @@ name: QCA-ALL
 
 #CI计划
 on:
-  #自动编译：当Auto-Clean运行完成后
-  workflow_run:
-    workflows: ["Auto-Clean"]
-    types:
-      - completed
+  #定时编译：每周一 03:00 UTC（北京时间 11:00）
+  schedule:
+    - cron: "0 3 * * 1"
   #手动编译
   workflow_dispatch:
     inputs:
@@ -24,8 +22,15 @@ on:
         required: false
         type: boolean
 
-#CI权限
-permissions: write-all
+#避免同一分支并发跑多个数小时的构建，新触发会取消旧运行
+concurrency:
+  group: qca-all-${{github.ref}}
+  cancel-in-progress: true
+
+#CI权限（最小权限：发布release需contents，缓存/旧release清理需actions）
+permissions:
+  contents: write
+  actions: write
 
 #CI任务
 jobs:
@@ -45,7 +50,7 @@ jobs:
       WRT_SSID: "OpenWrt"
       WRT_WORD: "12345678"
       WRT_IP: 192.168.68.1
-      WRT_PW: 无
+      WRT_PW: password
       WRT_REPO: https://github.com/${{matrix.SOURCE}}.git
       WRT_BRANCH: ${{matrix.BRANCH}}
       WRT_SOURCE: ${{matrix.SOURCE}}
