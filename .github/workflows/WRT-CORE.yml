@@ -67,7 +67,7 @@ jobs:
       cache_key: ${{steps.clone-code.outputs.cache_key}}
     steps:
       - name: Checkout Projects
-        uses: actions/checkout@main
+        uses: actions/checkout@v4
 
       - name: Initialization Environment
         env:
@@ -136,11 +136,12 @@ jobs:
       - name: Restore Build Cache
         id: cache-restore
         if: ${{ !inputs.WRT_TEST }}
-        uses: actions/cache/restore@main
+        uses: actions/cache/restore@v4
         with:
           key: ${{env.WRT_CACHE_KEY}}
           restore-keys: ${{env.WRT_CACHE_PREFIX}}-
           path: |
+            ./wrt/dl
             ./wrt/.ccache
             ./wrt/staging_dir/host*
             ./wrt/staging_dir/tool*
@@ -199,10 +200,11 @@ jobs:
 
       - name: Save Build Cache
         if: ${{ !inputs.WRT_TEST && success() && steps.cache-restore.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@main
+        uses: actions/cache/save@v4
         with:
           key: ${{env.WRT_CACHE_KEY}}
           path: |
+            ./wrt/dl
             ./wrt/.ccache
             ./wrt/staging_dir/host*
             ./wrt/staging_dir/tool*
@@ -305,3 +307,17 @@ jobs:
               gh cache delete "$CACHE_ID" --repo "$GH_REPO" ||
                 echo "warning: failed to delete cache $CACHE_ID ($CACHE_KEY)"
             done
+
+  cleanup-releases:
+    name: Clean old releases
+    needs: core
+    if: ${{ !inputs.WRT_TEST && needs.core.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Delete old releases
+        uses: mgz0227/delete-older-releases@v0.3.4
+        with:
+          keep_latest: 3
+          delete_tags: true
