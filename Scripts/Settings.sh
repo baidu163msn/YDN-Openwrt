@@ -21,7 +21,7 @@ if [ "${#FLASH_FILES[@]}" -eq 0 ]; then
 	exit 1
 fi
 for FILE in "${FLASH_FILES[@]}"; do
-	if grep -Eq '192\.168\\.[0-9]*\.[0-9]*' "$FILE"; then
+	if grep -Eq '192\.168\.[0-9]*\.[0-9]*' "$FILE"; then
 		sed -i "s|192\\.[0-9]*\\.[0-9]*\\.[0-9]*|$WRT_IP|g" "$FILE"
 		if ! grep -Fq "$WRT_IP" "$FILE"; then
 			echo "::error::LuCI flash.js IP replacement verification failed: $FILE"
