@@ -78,9 +78,9 @@ UPDATE_PACKAGE() {
 # momo/nikki/passwall/passwall2/ddns-go/diskman/easytier/mosdns/qbittorrent/vnt 等插件，
 # 以及其它机型的 fancontrol/netmode 系列）已移除以缩短构建，
 # 历史完整列表见本文件的 git 记录；临时增补请写到 Scripts/PRIVATE.sh，无需改本文件。
-UPDATE_PACKAGE "argon" "sbwml/luci-theme-argon" "openwrt-25.12"
-UPDATE_PACKAGE "openclash" "vernesong/OpenClash" "dev" "pkg"
-UPDATE_PACKAGE "viking" "VIKINGYFY/packages" "main" "" "axonhub gecoosac sing-box luci-app-homeproxy luci-app-timewol luci-app-wolplus luci-app-wolultra"
+UPDATE_PACKAGE "argon" "sbwml/luci-theme-argon" "openwrt-25.12" || exit $?
+UPDATE_PACKAGE "openclash" "vernesong/OpenClash" "dev" "pkg" || exit $?
+UPDATE_PACKAGE "viking" "VIKINGYFY/packages" "main" "" "axonhub gecoosac sing-box luci-app-homeproxy luci-app-timewol luci-app-wolplus luci-app-wolultra" || exit $?
 
 #更新软件包版本
 UPDATE_VERSION() {
