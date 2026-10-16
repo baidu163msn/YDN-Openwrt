@@ -69,7 +69,7 @@ if ! grep -Fq 'lan) ipad=${ipaddr:-"192.168.1.1"}' "$CFG_FILE"; then
 fi
 sed -i "s|lan) ipad=\${ipaddr:-\"192.168.1.1\"}|lan) ipad=\${ipaddr:-\"$WRT_IP\"}|" "$CFG_FILE"
 
-if ! grep -Fq "lan) ipad=${ipaddr:-\"$WRT_IP\"}" "$CFG_FILE"; then
+if ! grep -Fq 'lan) ipad=${ipaddr:-"'"$WRT_IP"'"}' "$CFG_FILE"; then
 	echo "::error::LAN default IP verification failed in $CFG_FILE"
 	exit 1
 fi
@@ -80,6 +80,10 @@ if ! grep -q "^\s*option hostname" "$CFG_FILE" && ! grep -q "hostname='" "$CFG_F
 	exit 1
 fi
 sed -i "s|hostname='.*'|hostname='$WRT_NAME'|g" "$CFG_FILE"
+if ! grep -Fq "hostname='$WRT_NAME'" "$CFG_FILE"; then
+	echo "::error::Hostname verification failed in $CFG_FILE"
+	exit 1
+fi
 
 #引入私有扩展配置
 if [ -f "$GITHUB_WORKSPACE/Config/PRIVATE.txt" ]; then
