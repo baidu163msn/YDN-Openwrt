@@ -75,6 +75,7 @@ if [ -d "$WIFI_DIR" ]; then
 fi
 
 if [ "$WIFI_FOUND" -eq 0 ] && [ -f "$WIFI_UC" ]; then
+	# 兼容旧版 shell 格式
 	if grep -q "^ssid=" "$WIFI_UC" && grep -q "^key=" "$WIFI_UC"; then
 		sed -i \
 			-e "s|^ssid='.*'|ssid='$WRT_SSID'|" \
@@ -87,6 +88,24 @@ if [ "$WIFI_FOUND" -eq 0 ] && [ -f "$WIFI_UC" ]; then
 			exit 1
 		fi
 		WIFI_FOUND=1
+	fi
+
+	# 当前 ImmortalWrt 的 ucode 格式：替换无线默认 SSID 和密钥回退值
+	if [ "$WIFI_FOUND" -eq 0 ] &&
+	   grep -Fq "defaults?.ssid || 'OWRT'" "$WIFI_UC" &&
+	   grep -Fq "defaults?.key || '12345678'" "$WIFI_UC"; then
+		sed -i \
+			-e "s|defaults?\.ssid || 'OWRT'|defaults?.ssid || '$WRT_SSID'|" \
+			-e "s|defaults?\.key || '12345678'|defaults?.key || '$WRT_WORD'|" \
+			"$WIFI_UC"
+
+		if ! grep -Fq "defaults?.ssid || '$WRT_SSID'" "$WIFI_UC" ||
+		   ! grep -Fq "defaults?.key || '$WRT_WORD'" "$WIFI_UC"; then
+			echo "::error::Wi-Fi ucode defaults verification failed: $WIFI_UC"
+			exit 1
+		fi
+		WIFI_FOUND=1
+		echo "Wi-Fi ucode defaults updated: $WIFI_UC"
 	fi
 fi
 
