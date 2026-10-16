@@ -13,32 +13,58 @@ UPDATE_PACKAGE() {
 
 	echo " "
 
-	# 删除本地可能存在的不同名称的软件包
-	for NAME in "${PKG_LIST[@]}"; do
-		# 查找匹配的目录
-		echo "Search directory: $NAME"
-		local FOUND_DIRS=$(find ../feeds/luci/ ../feeds/packages/ -maxdepth 3 -type d -iname "*$NAME*" 2>/dev/null)
+	# 先克隆并验证上游仓库；失败时不删除现有软件包
+	if ! git clone --depth=1 --single-branch --branch "$PKG_BRANCH" "https://github.com/$PKG_REPO.git"; then
+		echo "::error::Failed to clone $PKG_REPO branch $PKG_BRANCH"
+		return 1
+	fi
+	if ! git -C "$REPO_NAME" rev-parse --verify HEAD >/dev/null 2>&1; then
+		echo "::error::Cloned repository is invalid: $REPO_NAME"
+		return 1
+	fi
 
-		# 删除找到的目录
-		if [ -n "$FOUND_DIRS" ]; then
-			while read -r DIR; do
-				rm -rf "$DIR"
-				echo "Delete directory: $DIR"
-			done <<< "$FOUND_DIRS"
-		else
-			echo "Not fonud directory: $NAME"
+	# pkg 模式先确认上游存在可提取的包目录，避免验证失败后删除旧包
+	local PKG_DIRS=()
+	if [[ "$PKG_SPECIAL" == "pkg" ]]; then
+		mapfile -d '' PKG_DIRS < <(
+			find "./$REPO_NAME" -mindepth 2 -maxdepth 5 -type d -iname "*$PKG_NAME*" \
+				-exec test -f "{}/Makefile" \\; -print0
+		)
+		if [ "${#PKG_DIRS[@]}" -eq 0 ]; then
+			echo "::error::No package directory with Makefile found for $PKG_NAME in $PKG_REPO"
+			return 1
 		fi
+	fi
+
+	# 只删除目录名与包名/显式别名完全匹配的目录，避免模糊匹配误删
+	for NAME in "${PKG_LIST[@]}"; do
+		[ -n "$NAME" ] || continue
+		echo "Search exact package directory: $NAME"
+		while IFS= read -r -d '' DIR; do
+			echo "Delete directory: $DIR"
+			rm -rf -- "$DIR" || {
+				echo "::error::Failed to remove package directory: $DIR"
+				return 1
+			}
+		done < <(
+			find ../feeds/luci/ ../feeds/packages/ -mindepth 1 -maxdepth 3 \
+				-type d -iname "$NAME" -print0 2>/dev/null
+		)
 	done
-
-	# 克隆 GitHub 仓库
-	git clone --depth=1 --single-branch --branch $PKG_BRANCH "https://github.com/$PKG_REPO.git"
-
 	# 处理克隆的仓库
 	if [[ "$PKG_SPECIAL" == "pkg" ]]; then
-		find ./$REPO_NAME/*/ -maxdepth 3 -type d -iname "*$PKG_NAME*" -prune -exec cp -rf {} ./ \;
-		rm -rf ./$REPO_NAME/
+		for DIR in "${PKG_DIRS[@]}"; do
+			cp -rf -- "$DIR" ./ || {
+				echo "::error::Failed to copy package directory: $DIR"
+				return 1
+			}
+		done
+		rm -rf -- "./$REPO_NAME"
 	elif [[ "$PKG_SPECIAL" == "name" ]]; then
-		mv -f $REPO_NAME $PKG_NAME
+		if ! mv -f -- "$REPO_NAME" "$PKG_NAME"; then
+			echo "::error::Failed to rename $REPO_NAME to $PKG_NAME"
+			return 1
+		fi
 	fi
 }
 
