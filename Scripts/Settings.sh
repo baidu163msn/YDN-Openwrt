@@ -11,25 +11,75 @@ sed -i "s/192\.168\.[0-9]*\.[0-9]*/$WRT_IP/g" $(find ./feeds/luci/modules/luci-m
 #添加编译日期标识
 sed -i "s/(\(luciversion || ''\))/(\1) + (' \/ $WRT_MARK-$WRT_DATE')/g" $(find ./feeds/luci/modules/luci-mod-status/ -type f -name "10_system.js")
 
-WIFI_SH=$(find ./target/linux/{mediatek/filogic,qualcommax}/base-files/etc/uci-defaults/ -type f -name "*set-wireless.sh" 2>/dev/null)
+# Athena 属于 qualcommax/ipq60xx：优先只搜索当前目标平台，避免 find 返回多行路径
+WIFI_DIR="./target/linux/qualcommax/base-files/etc/uci-defaults"
 WIFI_UC="./package/network/config/wifi-scripts/files/lib/wifi/mac80211.uc"
-if [ -f "$WIFI_SH" ]; then
-	#修改WIFI名称
-	sed -i "s/BASE_SSID='.*'/BASE_SSID='$WRT_SSID'/g" $WIFI_SH
-	#修改WIFI密码
-	sed -i "s/BASE_WORD='.*'/BASE_WORD='$WRT_WORD'/g" $WIFI_SH
-elif [ -f "$WIFI_UC" ]; then
-	#修改WIFI名称
-	sed -i "s/ssid='.*'/ssid='$WRT_SSID'/g" $WIFI_UC
-	#修改WIFI密码
-	sed -i "s/key='.*'/key='$WRT_WORD'/g" $WIFI_UC
+WIFI_FOUND=0
+
+if [ -d "$WIFI_DIR" ]; then
+	while IFS= read -r -d '' WIFI_FILE; do
+		if grep -q '^BASE_SSID=' "$WIFI_FILE" && grep -q '^BASE_WORD=' "$WIFI_FILE"; then
+			sed -i \
+				-e "s|^BASE_SSID='.*'|BASE_SSID='$WRT_SSID'|" \
+				-e "s|^BASE_WORD='.*'|BASE_WORD='$WRT_WORD'|" \
+				"$WIFI_FILE"
+
+			if ! grep -Fxq "BASE_SSID='$WRT_SSID'" "$WIFI_FILE" ||
+			   ! grep -Fxq "BASE_WORD='$WRT_WORD'" "$WIFI_FILE"; then
+				echo "::error::Wi-Fi defaults verification failed: $WIFI_FILE"
+				exit 1
+			fi
+			WIFI_FOUND=1
+			echo "Wi-Fi defaults updated: $WIFI_FILE"
+		fi
+	done < <(find "$WIFI_DIR" -type f -name '*set-wireless.sh' -print0)
+fi
+
+if [ "$WIFI_FOUND" -eq 0 ] && [ -f "$WIFI_UC" ]; then
+	if grep -q "^ssid=" "$WIFI_UC" && grep -q "^key=" "$WIFI_UC"; then
+		sed -i \
+			-e "s|^ssid='.*'|ssid='$WRT_SSID'|" \
+			-e "s|^key='.*'|key='$WRT_WORD'|" \
+			"$WIFI_UC"
+
+		if ! grep -Fxq "ssid='$WRT_SSID'" "$WIFI_UC" ||
+		   ! grep -Fxq "key='$WRT_WORD'" "$WIFI_UC"; then
+			echo "::error::Wi-Fi config verification failed: $WIFI_UC"
+			exit 1
+		fi
+		WIFI_FOUND=1
+	fi
+fi
+
+if [ "$WIFI_FOUND" -eq 0 ]; then
+	echo "::error::No supported Wi-Fi defaults found for qualcommax target"
+	exit 1
 fi
 
 CFG_FILE="./package/base-files/files/bin/config_generate"
-#修改默认IP地址
-sed -i "s/192\.168\.[0-9]*\.[0-9]*/$WRT_IP/g" $CFG_FILE
-#修改默认主机名
-sed -i "s/hostname='.*'/hostname='$WRT_NAME'/g" $CFG_FILE
+if [ ! -f "$CFG_FILE" ]; then
+	echo "::error::Missing config_generate: $CFG_FILE"
+	exit 1
+fi
+
+# 仅替换 LAN 默认地址表达式，不再全文件替换所有 192.168.x.x 字符串
+if ! grep -Fq 'lan) ipad=${ipaddr:-"192.168.1.1"}' "$CFG_FILE"; then
+	echo "::error::Expected LAN default IP expression not found in $CFG_FILE"
+	exit 1
+fi
+sed -i "s|lan) ipad=\${ipaddr:-\"192.168.1.1\"}|lan) ipad=\${ipaddr:-\"$WRT_IP\"}|" "$CFG_FILE"
+
+if ! grep -Fq "lan) ipad=${ipaddr:-\"$WRT_IP\"}" "$CFG_FILE"; then
+	echo "::error::LAN default IP verification failed in $CFG_FILE"
+	exit 1
+fi
+
+# 修改默认主机名前先确认目标文件中存在预期配置
+if ! grep -q "^\s*option hostname" "$CFG_FILE" && ! grep -q "hostname='" "$CFG_FILE"; then
+	echo "::error::Expected hostname setting not found in $CFG_FILE"
+	exit 1
+fi
+sed -i "s|hostname='.*'|hostname='$WRT_NAME'|g" "$CFG_FILE"
 
 #引入私有扩展配置
 if [ -f "$GITHUB_WORKSPACE/Config/PRIVATE.txt" ]; then
