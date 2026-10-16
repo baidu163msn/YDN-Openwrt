@@ -94,9 +94,10 @@ if [ "$WIFI_FOUND" -eq 0 ] && [ -f "$WIFI_UC" ]; then
 	if [ "$WIFI_FOUND" -eq 0 ] &&
 	   grep -Fq "defaults?.ssid || 'OWRT'" "$WIFI_UC" &&
 	   grep -Fq "defaults?.key || '12345678'" "$WIFI_UC"; then
+		# 使用 # 作为分隔符，避免替换文本中的 || 与 sed 分隔符冲突
 		sed -i \
-			-e "s|defaults?\.ssid || 'OWRT'|defaults?.ssid || '$WRT_SSID'|" \
-			-e "s|defaults?\.key || '12345678'|defaults?.key || '$WRT_WORD'|" \
+			-e "s#defaults?\.ssid || 'OWRT'#defaults?.ssid || '$WRT_SSID'#" \
+			-e "s#defaults?\.key || '12345678'#defaults?.key || '$WRT_WORD'#" \
 			"$WIFI_UC"
 
 		if ! grep -Fq "defaults?.ssid || '$WRT_SSID'" "$WIFI_UC" ||
