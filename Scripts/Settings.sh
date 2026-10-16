@@ -2,14 +2,53 @@
 # SPDX-License-Identifier: MIT
 # Copyright (C) 2026 VIKINGYFY
 
-#移除luci-app-attendedsysupgrade
-sed -i "/attendedsysupgrade/d" $(find ./feeds/luci/collections/ -type f -name "Makefile")
-#修改默认主题
-sed -i "s/luci-theme-bootstrap/luci-theme-$WRT_THEME/g" $(find ./feeds/luci/collections/ -type f -name "Makefile")
-#修改immortalwrt.lan关联IP
-sed -i "s/192\.168\.[0-9]*\.[0-9]*/$WRT_IP/g" $(find ./feeds/luci/modules/luci-mod-system/ -type f -name "flash.js")
-#添加编译日期标识
-sed -i "s/(\(luciversion || ''\))/(\1) + (' \/ $WRT_MARK-$WRT_DATE')/g" $(find ./feeds/luci/modules/luci-mod-status/ -type f -name "10_system.js")
+# LuCI 集合 Makefile 可能有多个：用 NUL 分隔安全读取，并确认确实找到文件
+mapfile -d '' COLLECTION_MAKEFILES < <(find ./feeds/luci/collections/ -type f -name "Makefile" -print0)
+if [ "${#COLLECTION_MAKEFILES[@]}" -eq 0 ]; then
+	echo "::error::No LuCI collection Makefile found"
+	exit 1
+fi
+
+for FILE in "${COLLECTION_MAKEFILES[@]}"; do
+	sed -i '/attendedsysupgrade/d' "$FILE"
+	sed -i "s|luci-theme-bootstrap|luci-theme-$WRT_THEME|g" "$FILE"
+done
+
+# 对需要修改的 LuCI 文件显式检查路径和目标文本，避免 find 为空时误执行 sed
+mapfile -d '' FLASH_FILES < <(find ./feeds/luci/modules/luci-mod-system/ -type f -name "flash.js" -print0)
+if [ "${#FLASH_FILES[@]}" -eq 0 ]; then
+	echo "::error::LuCI flash.js not found"
+	exit 1
+fi
+for FILE in "${FLASH_FILES[@]}"; do
+	if grep -Eq '192\\.168\\.[0-9]*\\.[0-9]*' "$FILE"; then
+		sed -i "s|192\\.[0-9]*\\.[0-9]*\\.[0-9]*|$WRT_IP|g" "$FILE"
+		if ! grep -Fq "$WRT_IP" "$FILE"; then
+			echo "::error::LuCI flash.js IP replacement verification failed: $FILE"
+			exit 1
+		fi
+	else
+		echo "::error::Expected LAN IP pattern not found in $FILE"
+		exit 1
+	fi
+done
+
+mapfile -d '' STATUS_FILES < <(find ./feeds/luci/modules/luci-mod-status/ -type f -name "10_system.js" -print0)
+if [ "${#STATUS_FILES[@]}" -eq 0 ]; then
+	echo "::error::LuCI 10_system.js not found"
+	exit 1
+fi
+for FILE in "${STATUS_FILES[@]}"; do
+	if ! grep -Fq "(luciversion || '')" "$FILE"; then
+		echo "::error::Expected luciversion expression not found in $FILE"
+		exit 1
+	fi
+	sed -i "s|(\\(luciversion || ''\\))|(\\1) + (' / $WRT_MARK-$WRT_DATE')|g" "$FILE"
+	if ! grep -Fq "$WRT_MARK-$WRT_DATE" "$FILE"; then
+		echo "::error::Build date marker verification failed: $FILE"
+		exit 1
+	fi
+done
 
 # Athena 属于 qualcommax/ipq60xx：优先只搜索当前目标平台，避免 find 返回多行路径
 WIFI_DIR="./target/linux/qualcommax/base-files/etc/uci-defaults"
