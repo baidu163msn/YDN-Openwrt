@@ -28,8 +28,8 @@ UPDATE_PACKAGE() {
 	if [[ "$PKG_SPECIAL" == "pkg" ]]; then
 		mapfile -d '' PKG_DIRS < <(
 			find "./$REPO_NAME" -mindepth 2 -maxdepth 5 -type d \
-				\\( -iname "$PKG_NAME" -o -iname "*-$PKG_NAME" \\) \
-				-exec test -f "{}/Makefile" \\; -print0
+				\( -iname "$PKG_NAME" -o -iname "*-$PKG_NAME" \) \
+				-exec test -f "{}/Makefile" \; -print0
 		)
 		if [ "${#PKG_DIRS[@]}" -eq 0 ]; then
 			echo "::error::No package directory with Makefile found for $PKG_NAME in $PKG_REPO"
@@ -49,7 +49,7 @@ UPDATE_PACKAGE() {
 			}
 		done < <(
 			find ../feeds/luci/ ../feeds/packages/ -mindepth 1 -maxdepth 3 \
-				-type d \\( -iname "$NAME" -o -iname "*-$NAME" \\) -print0 2>/dev/null
+				-type d \( -iname "$NAME" -o -iname "*-$NAME" \) -print0 2>/dev/null
 		)
 	done
 	# 处理克隆的仓库
