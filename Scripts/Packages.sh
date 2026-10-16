@@ -27,7 +27,7 @@ UPDATE_PACKAGE() {
 	local PKG_DIRS=()
 	if [[ "$PKG_SPECIAL" == "pkg" ]]; then
 		mapfile -d '' PKG_DIRS < <(
-			find "./$REPO_NAME" -mindepth 2 -maxdepth 5 -type d \
+			find "./$REPO_NAME" -mindepth 1 -maxdepth 5 -type d \
 				\( -iname "$PKG_NAME" -o -iname "*-$PKG_NAME" \) \
 				-exec test -f "{}/Makefile" \; -print0
 		)
