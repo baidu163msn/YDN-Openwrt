@@ -43,7 +43,7 @@ for FILE in "${STATUS_FILES[@]}"; do
 		echo "::error::Expected luciversion expression not found in $FILE"
 		exit 1
 	fi
-	sed -i "s|(\\(luciversion || ''\\))|(\\1) + (' / $WRT_MARK-$WRT_DATE')|g" "$FILE"
+	sed -i "s@(\\(luciversion || ''\\))@(\\1) + (' / $WRT_MARK-$WRT_DATE')@g" "$FILE"
 	if ! grep -Fq "$WRT_MARK-$WRT_DATE" "$FILE"; then
 		echo "::error::Build date marker verification failed: $FILE"
 		exit 1
