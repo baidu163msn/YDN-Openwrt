@@ -187,7 +187,42 @@ jobs:
 
           $GITHUB_WORKSPACE/Scripts/Settings.sh
 
-          make defconfig -j$(nproc) && make clean -j$(nproc)
+          # 保存 defconfig 前的配置，便于审查配置归一化带来的变化
+          cp .config "$RUNNER_TEMP/config.before-defconfig"
+
+          # defconfig 是配置生成步骤，无需并行参数
+          make defconfig
+
+          # 对 Athena / OpenClash / NSS 的关键选项做快速回归检查
+          REQUIRED_OPTIONS=(
+            "CONFIG_TARGET_qualcommax=y"
+            "CONFIG_TARGET_qualcommax_ipq60xx=y"
+            "CONFIG_TARGET_DEVICE_qualcommax_ipq60xx_DEVICE_jdcloud_re-cs-02=y"
+            "CONFIG_PACKAGE_luci-app-openclash=y"
+            "CONFIG_PACKAGE_sing-box=y"
+            "CONFIG_PACKAGE_kmod-qca-nss-drv=y"
+            "CONFIG_PACKAGE_kmod-qca-nss-ecm=y"
+          )
+
+          for option in "${REQUIRED_OPTIONS[@]}"; do
+            if ! grep -Fxq "$option" .config; then
+              echo "::error::Required config missing after defconfig: $option"
+              exit 1
+            fi
+          done
+
+          # diff 返回 1 代表配置有差异，属于正常情况；大于 1 才是执行错误
+          diff_status=0
+          diff -u "$RUNNER_TEMP/config.before-defconfig" .config > "$RUNNER_TEMP/config-defconfig.diff" || diff_status=$?
+          if [ "$diff_status" -gt 1 ]; then
+            echo "::error::Failed to generate defconfig diff"
+            exit 1
+          fi
+
+          echo "=== defconfig changes ==="
+          cat "$RUNNER_TEMP/config-defconfig.diff"
+
+          make clean -j"$(nproc)"
 
       - name: Download Packages
         if: ${{ !inputs.WRT_TEST }}
@@ -233,6 +268,10 @@ jobs:
           cd ./wrt/ && mkdir ./upload/
 
           cp -f ./.config ./upload/Config-"$WRT_CONFIG"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_DATE".txt
+
+          if [ -f "$RUNNER_TEMP/config-defconfig.diff" ]; then
+            cp "$RUNNER_TEMP/config-defconfig.diff" "./upload/Config-defconfig-diff-$WRT_CONFIG-$WRT_DATE.txt"
+          fi
 
           if [[ "$WRT_TEST" != 'true' ]]; then
             echo "WRT_KVER=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^kernel - \K[\d\.]+' {} \;)" >> $GITHUB_ENV
