@@ -44,7 +44,6 @@ on:
         type: boolean
 
 env:
-  GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
   WRT_CONFIG: ${{inputs.WRT_CONFIG}}
   WRT_THEME: ${{inputs.WRT_THEME}}
   WRT_NAME: ${{inputs.WRT_NAME}}
@@ -58,10 +57,17 @@ env:
   WRT_PACKAGE: ${{inputs.WRT_PACKAGE}}
   WRT_TEST: ${{inputs.WRT_TEST}}
 
+#最小权限：默认只读；仅发布 Release 的 core 与维护缓存的 housekeeping 需要写权限
+permissions:
+  contents: read
+
 jobs:
   core:
     name: ${{inputs.WRT_SOURCE}}
     runs-on: ubuntu-latest
+    timeout-minutes: 300
+    permissions:
+      contents: write
     outputs:
       cache_prefix: ${{steps.initialize-values.outputs.cache_prefix}}
       cache_key: ${{steps.clone-code.outputs.cache_key}}
@@ -75,12 +81,11 @@ jobs:
         run: |
           sudo -E apt -yqq purge firefox
           sudo -E apt -yqq update
-          sudo -E apt -yqq full-upgrade
           sudo -E apt -yqq autoremove --purge
-          sudo -E apt -yqq autoclean
           sudo -E apt -yqq clean
           sudo -E apt -yqq install dos2unix libfuse-dev
           sudo bash -c 'bash <(curl -sL https://build-scripts.immortalwrt.org/init_build_environment.sh)'
+          ccache --max-size=2G
           sudo -E systemctl daemon-reload
           sudo -E timedatectl set-timezone "Asia/Shanghai"
 
@@ -115,7 +120,7 @@ jobs:
       - name: Clone Code
         id: clone-code
         run: |
-          git clone --depth=1 --single-branch --branch $WRT_BRANCH $WRT_REPO ./wrt/
+          git clone --depth=1 --single-branch --branch "$WRT_BRANCH" "$WRT_REPO" ./wrt/
 
           cd ./wrt/
           WRT_HASH=$(git rev-parse HEAD)
@@ -131,7 +136,8 @@ jobs:
 
       - name: Check Scripts
         run: |
-          find ./ -maxdepth 3 -type f -iregex ".*\(txt\|sh\)$" -exec dos2unix {} \; -exec chmod +x {} \;
+          find ./ -maxdepth 3 -type f -iregex ".*\(txt\|sh\)$" -exec dos2unix {} \;
+          find ./ -maxdepth 3 -type f -iregex ".*\.sh$" -exec chmod +x {} \;
 
       - name: Restore Build Cache
         id: cache-restore
@@ -193,15 +199,27 @@ jobs:
           # defconfig 是配置生成步骤，无需并行参数
           make defconfig
 
-          # 对 Athena / OpenClash / NSS 的关键选项做快速回归检查
+          # 对关键目标/插件做回归检查，配置被 defconfig 静默丢弃或改名时直接报错
           REQUIRED_OPTIONS=(
             "CONFIG_TARGET_qualcommax=y"
             "CONFIG_TARGET_qualcommax_ipq60xx=y"
             "CONFIG_TARGET_DEVICE_qualcommax_ipq60xx_DEVICE_jdcloud_re-cs-02=y"
+            "CONFIG_PACKAGE_luci-theme-argon=y"
             "CONFIG_PACKAGE_luci-app-openclash=y"
             "CONFIG_PACKAGE_sing-box=y"
+            "CONFIG_PACKAGE_dnsmasq-full=y"
+            "CONFIG_PACKAGE_firewall4=y"
+            "CONFIG_PACKAGE_wpad-openssl=y"
+            "CONFIG_PACKAGE_luci-app-athena-led=y"
+            "CONFIG_PACKAGE_luci-app-filebrowser-go=y"
+            "CONFIG_PACKAGE_luci-app-samba4=y"
+            "CONFIG_PACKAGE_luci-app-upnp=y"
+            "CONFIG_PACKAGE_luci-app-zerotier=y"
+            "CONFIG_PACKAGE_ppp-mod-pppoe=y"
             "CONFIG_PACKAGE_kmod-qca-nss-drv=y"
             "CONFIG_PACKAGE_kmod-qca-nss-ecm=y"
+            "CONFIG_PACKAGE_kmod-qca-nss-drv-pppoe=y"
+            "CONFIG_PACKAGE_kmod-usb-storage-uas=y"
           )
 
           for option in "${REQUIRED_OPTIONS[@]}"; do
@@ -219,17 +237,16 @@ jobs:
             exit 1
           fi
 
-          echo "=== defconfig changes ==="
+          echo "::group::defconfig changes"
           cat "$RUNNER_TEMP/config-defconfig.diff"
-
-          make clean -j"$(nproc)"
+          echo "::endgroup::"
 
       - name: Download Packages
         if: ${{ !inputs.WRT_TEST }}
         run: |
           cd ./wrt/
 
-          make download -j$(nproc)
+          make download -j$(nproc) || make download -j1 V=s
 
       - name: Compile Firmware
         if: ${{ !inputs.WRT_TEST }}
@@ -279,21 +296,20 @@ jobs:
 
             find ./bin/targets/ -iregex ".*\(buildinfo\|json\|sha256sums\|packages\)$" -exec rm -rf {} +
 
-            for FILE in $(find ./bin/targets/ -type f -iname "*$WRT_TARGET*") ; do
-              EXT=$(basename $FILE | cut -d '.' -f 2-)
-              NAME=$(basename $FILE | cut -d '.' -f 1 | grep -io "\($WRT_TARGET\).*")
-              NEW_FILE="$NAME"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_WIFI"-"$WRT_DATE"."$EXT"
-              mv -f $FILE ./upload/$NEW_FILE
-            done
+            while IFS= read -r FILE; do
+              EXT=$(basename "$FILE" | cut -d '.' -f 2-)
+              NAME=$(basename "$FILE" | cut -d '.' -f 1 | grep -io "\($WRT_TARGET\).*")
+              NEW_FILE="$NAME-$WRT_INFO-$WRT_BRANCH-$WRT_WIFI-$WRT_DATE.$EXT"
+              mv -f "$FILE" "./upload/$NEW_FILE"
+            done < <(find ./bin/targets/ -type f -iname "*$WRT_TARGET*")
 
             find ./bin/targets/ -type f -exec mv -f {} ./upload/ \;
-
-            make clean -j$(nproc)
           fi
 
       - name: Release Firmware
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
+          token: ${{secrets.GITHUB_TOKEN}}
           tag_name: ${{env.WRT_CONFIG}}-${{env.WRT_INFO}}-${{env.WRT_BRANCH}}-${{env.WRT_DATE}}
           files: ./wrt/upload/*.*
           body: |
@@ -311,16 +327,17 @@ jobs:
             内核版本：${{env.WRT_KVER}}
             插件列表：${{env.WRT_LIST}}
 
-  cache-rollover:
-    name: Roll cache generations
+  housekeeping:
+    name: Roll cache and clean old releases
     needs: core
     if: ${{ !inputs.WRT_TEST && needs.core.result == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       actions: write
       contents: write
     concurrency:
-      group: wrt-cache-rollover-${{github.ref}}-${{needs.core.outputs.cache_prefix}}
+      group: wrt-housekeeping-${{github.ref}}-${{needs.core.outputs.cache_prefix}}
       cancel-in-progress: false
     env:
       GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
@@ -354,16 +371,16 @@ jobs:
                 echo "warning: failed to delete cache $CACHE_ID ($CACHE_KEY)"
             done
 
-  cleanup-releases:
-    name: Clean old releases
-    needs: core
-    if: ${{ !inputs.WRT_TEST && needs.core.result == 'success' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Delete old releases
-        uses: mgz0227/delete-older-releases@dfbe6be2a006e9475dfcbe5b8d201f1824c2a9fe # v0.3.4
-        with:
-          keep_latest: 3
-          delete_tags: true
+      - name: Delete Old Releases
+        run: |
+          set -euo pipefail
+
+          gh release list --repo "$GH_REPO" --limit 100 --json tagName,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[3:] | .[].tagName' |
+            while IFS= read -r TAG; do
+              [ -n "$TAG" ] || continue
+              gh release delete "$TAG" --repo "$GH_REPO" --yes --cleanup-tag ||
+                echo "warning: failed to delete release $TAG"
+            done
+
+          echo "old releases cleaned; keeping the latest 3"

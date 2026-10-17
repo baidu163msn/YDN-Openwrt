@@ -147,7 +147,7 @@ fi
 #引入私有扩展配置
 if [ -f "$GITHUB_WORKSPACE/Config/PRIVATE.txt" ]; then
 	echo "Applying private configurations from PRIVATE.txt..."
-	cat $GITHUB_WORKSPACE/Config/PRIVATE.txt >> ./.config
+	cat "$GITHUB_WORKSPACE/Config/PRIVATE.txt" >> ./.config
 fi
 
 #手动调整的插件
@@ -155,17 +155,17 @@ if [ -n "$WRT_PACKAGE" ]; then
 	echo -e "$WRT_PACKAGE" >> ./.config
 fi
 
-#无WIFI配置标志
-if [[ "${WRT_CONFIG,,}" == *"wifi"* && "${WRT_CONFIG,,}" == *"no"* ]]; then
-	echo "WRT_WIFI=wifi-no" >> $GITHUB_ENV
+#无WIFI配置标志（配置文件名含 WIFI-NO，如 IPQ60XX-WIFI-NO，避免 "no" 子串误匹配）
+if [[ "${WRT_CONFIG,,}" == *"wifi-no"* ]]; then
+	echo "WRT_WIFI=wifi-no" >> "$GITHUB_ENV"
 fi
 
 #高通平台调整
 DTS_PATH="./target/linux/qualcommax/dts/"
 if [[ "${WRT_TARGET^^}" == *"QUALCOMMAX"* ]]; then
-	#无WIFI配置调整Q6大小
-	if [[ "${WRT_CONFIG,,}" == *"wifi"* && "${WRT_CONFIG,,}" == *"no"* ]]; then
-		find $DTS_PATH -type f ! -iname '*nowifi*' -exec sed -i 's/ipq\(6018\|8074\).dtsi/ipq\1-nowifi.dtsi/g' {} +
+	#无WIFI配置调整Q6大小（配置文件名含 WIFI-NO）
+	if [[ "${WRT_CONFIG,,}" == *"wifi-no"* ]]; then
+		find "$DTS_PATH" -type f ! -iname '*nowifi*' -exec sed -i 's/ipq\(6018\|8074\).dtsi/ipq\1-nowifi.dtsi/g' {} +
 		echo "qualcommax set up nowifi successfully!"
 	fi
 fi

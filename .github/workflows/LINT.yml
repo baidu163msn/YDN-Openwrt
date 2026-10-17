@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: MIT
+# CI 静态检查：actionlint 校验 workflow 语法与表达式，shellcheck 校验 Scripts
+
+#CI项目
+name: LINT
+
+#CI计划
+on:
+  push:
+    paths:
+      - ".github/workflows/**"
+      - "Scripts/**"
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "Scripts/**"
+  #手动触发
+  workflow_dispatch:
+
+#CI权限（仅需读取仓库内容）
+permissions:
+  contents: read
+
+#CI任务
+jobs:
+  lint:
+    name: Lint workflows and scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ACTIONLINT_VERSION: "1.7.12"
+    steps:
+      - name: Checkout Projects
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: ShellCheck Scripts
+        run: shellcheck --severity=warning Scripts/*.sh
+
+      - name: Actionlint
+        run: |
+          set -euo pipefail
+          curl -fsSLo "${RUNNER_TEMP}/actionlint.tar.gz" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          tar -xzf "${RUNNER_TEMP}/actionlint.tar.gz" -C "${RUNNER_TEMP}" actionlint
+          # 内嵌 run 脚本的 shellcheck 集成关闭，脚本统一由上方 ShellCheck Scripts 步骤检查
+          "${RUNNER_TEMP}/actionlint" -shellcheck= -color .github/workflows/*.yml

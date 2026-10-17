@@ -1,0 +1,3 @@
+# 私有扩展文件（可能包含密码、IP 等敏感信息），禁止提交
+Config/PRIVATE.txt
+Scripts/PRIVATE.sh

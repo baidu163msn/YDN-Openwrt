@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MIT
+# workflow 中的 Action 均按 SHA 固定，由 Dependabot 每周提出升级（会同步更新版本注释）
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns:
+          - "*"
