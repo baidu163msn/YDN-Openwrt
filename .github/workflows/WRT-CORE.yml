@@ -205,6 +205,7 @@ jobs:
             "CONFIG_TARGET_qualcommax_ipq60xx=y"
             "CONFIG_TARGET_DEVICE_qualcommax_ipq60xx_DEVICE_jdcloud_re-cs-02=y"
             "CONFIG_PACKAGE_luci-theme-argon=y"
+            "CONFIG_PACKAGE_luci-app-argon-config=y"
             "CONFIG_PACKAGE_luci-app-openclash=y"
             "CONFIG_PACKAGE_sing-box=y"
             "CONFIG_PACKAGE_dnsmasq-full=y"
