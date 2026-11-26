@@ -376,10 +376,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          gh release list --repo "$GH_REPO" --limit 100 --json tagName,createdAt \
-            --jq 'sort_by(.createdAt) | reverse | .[3:] | .[].tagName' |
+          # 刚创建完的 Release 在列表接口里可能短暂返回 createdAt=null，
+          # 若按 createdAt 排序会被当成最旧并误删（曾导致新固件被删）。
+          # 这里改为按 tag 名中的时间后缀（YY.MM.DD-HH.MM.SS）降序排序，
+          # 保证最新 3 个 Release 始终保留。
+          ALL_TAGS=$(gh release list --repo "$GH_REPO" --limit 100 --json tagName --jq '.[].tagName')
+          OLD_TAGS=$(printf '%s\n' "$ALL_TAGS" | sort -r | tail -n +4)
+
+          if [ -z "$OLD_TAGS" ]; then
+            echo "nothing to clean; keeping the latest 3"
+            exit 0
+          fi
+
+          printf '%s\n' "$OLD_TAGS" |
             while IFS= read -r TAG; do
               [ -n "$TAG" ] || continue
+              echo "deleting old release: $TAG"
               gh release delete "$TAG" --repo "$GH_REPO" --yes --cleanup-tag ||
                 echo "warning: failed to delete release $TAG"
             done
