@@ -108,6 +108,24 @@ if [ "$WIFI_FOUND" -eq 0 ] && [ -f "$WIFI_UC" ]; then
 		WIFI_FOUND=1
 		echo "Wi-Fi ucode defaults updated: $WIFI_UC"
 	fi
+
+	# 新版 ImmortalWrt：ssid/key 默认值改为三元表达式，整段替换为固定值
+	if [ "$WIFI_FOUND" -eq 0 ] &&
+	   grep -Fq "ssid: defaults?.ssid ||" "$WIFI_UC" &&
+	   grep -Fq "key: defaults?.key ||" "$WIFI_UC"; then
+		sed -i -E \
+			-e "s#(ssid: defaults\?\.ssid \|\| )\(.*'OWRT'\)#\1'$WRT_SSID'#" \
+			-e "s#(key: defaults\?\.key \|\| )\(.*'12345678'\)#\1'$WRT_WORD'#" \
+			"$WIFI_UC"
+
+		if ! grep -Fq "ssid: defaults?.ssid || '$WRT_SSID'" "$WIFI_UC" ||
+		   ! grep -Fq "key: defaults?.key || '$WRT_WORD'" "$WIFI_UC"; then
+			echo "::error::Wi-Fi ternary defaults verification failed: $WIFI_UC"
+			exit 1
+		fi
+		WIFI_FOUND=1
+		echo "Wi-Fi ternary defaults updated: $WIFI_UC"
+	fi
 fi
 
 if [ "$WIFI_FOUND" -eq 0 ]; then
