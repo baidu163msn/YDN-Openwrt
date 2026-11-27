@@ -22,7 +22,7 @@
 
 Actions 页面选择 `QCA-ALL`：
 
-- 定时构建：每周一 03:00 UTC（北京时间 11:00）
+- 仅手动构建（`workflow_dispatch`），不再定时触发
 - 手动构建（workflow_dispatch）：
   - `PACKAGE`：临时调整插件配置（直接追加进 `.config` 的 kconfig 片段，多个用换行分隔）
   - `TEST`：仅生成并发布配置文件（含 `make defconfig` 归一化差异），不编译固件

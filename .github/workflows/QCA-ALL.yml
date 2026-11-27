@@ -4,11 +4,8 @@
 #CI项目
 name: QCA-ALL
 
-#CI计划
+#CI计划（仅手动触发）
 on:
-  #定时编译：每周一 03:00 UTC（北京时间 11:00）
-  schedule:
-    - cron: "0 3 * * 1"
   #手动编译
   workflow_dispatch:
     inputs:
