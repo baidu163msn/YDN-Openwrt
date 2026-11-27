@@ -223,12 +223,18 @@ jobs:
             "CONFIG_PACKAGE_kmod-usb-storage-uas=y"
           )
 
+          MISSING_OPTIONS=()
           for option in "${REQUIRED_OPTIONS[@]}"; do
             if ! grep -Fxq "$option" .config; then
-              echo "::error::Required config missing after defconfig: $option"
-              exit 1
+              MISSING_OPTIONS+=("$option")
             fi
           done
+          if [ "${#MISSING_OPTIONS[@]}" -gt 0 ]; then
+            for option in "${MISSING_OPTIONS[@]}"; do
+              echo "::error::Required config missing after defconfig: $option"
+            done
+            exit 1
+          fi
 
           # diff 返回 1 代表配置有差异，属于正常情况；大于 1 才是执行错误
           diff_status=0
