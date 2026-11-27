@@ -41,7 +41,7 @@ jobs:
       matrix:
         CONFIG: [IPQ60XX-WIFI-YES]
         SOURCE: [VIKINGYFY/immortalwrt]
-        BRANCH: [owrt]
+        BRANCH: [main]
     uses: ./.github/workflows/WRT-CORE.yml
     with:
       WRT_CONFIG: ${{matrix.CONFIG}}
